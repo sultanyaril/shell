@@ -56,7 +56,7 @@ void check_files(char **cmd, int *inp, int *out, int start_point) {
         }
         search = cmd[++i];
     }
-    if (flag) 
+    if (flag)
         *out = fd;
     else
         *inp = fd;
