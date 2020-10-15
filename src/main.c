@@ -34,35 +34,37 @@ char **get_list() {
     return answ;
 }
 
-void check_files(char **cmd, int *inp, int *out, int start_point) {
+void check_files(char **cmd, int startpoint) {
     char *search = cmd[0];
-    int flag = 0;
-    int fd = 0;
-    for (int i = start_point; cmd[i + 1] != NULL ;) {
+    for (int i = startpoint; cmd[i + 1] != NULL ;) {
         if (search[0] == '<') {
-            fd = open(cmd[i + 1], O_RDONLY | O_CREAT, 0);
-            flag = 0;
-            free(cmd[i+1]);
+            int fd = open(cmd[i + 1],
+                O_RDONLY | O_CREAT | O_TRUNC,
+                S_IRUSR | S_IWUSR);
+            dup2(fd, 0);
+            close(fd);
+            free(cmd[i + 1]);
+            free(cmd[i]);
             cmd[i] = NULL;
             break;
         } else {
             if (search[0] == '>') {
-                fd = open(cmd[i + 1], O_WRONLY | O_CREAT | O_TRUNC, 0);
-                flag = 1;
+                int fd = open(cmd[i + 1],
+                    O_WRONLY | O_CREAT | O_TRUNC,
+                    S_IRUSR | S_IWUSR);
+                dup2(fd, 1);
+                close(fd);
                 free(cmd[i + 1]);
+                free(cmd[i]);
                 cmd[i] = NULL;
                 break;
             }
         }
         search = cmd[++i];
     }
-    if (flag)
-        *out = fd;
-    else
-        *inp = fd;
 }
 
-int *segment_line(char **cmd, int *inp, int *out) {
+int *segment_line(char **cmd) {
     int cnt = 1;
     int *answ = malloc((cnt + 1) * sizeof(int));  // why realloc isnt working?
     answ[0] = 0;
@@ -76,9 +78,6 @@ int *segment_line(char **cmd, int *inp, int *out) {
         }
     }
     answ[cnt] = 0;
-    check_files(cmd, inp, out, 0);
-    if (cnt != 1)
-        check_files(cmd, inp, out, answ[cnt-1]);
     return answ;
 }
 
@@ -97,40 +96,51 @@ void free_list(char **arr, int *numb) {
 int main() {
     char **cmd = get_list();
     while (strcmp(cmd[0], "exit") && strcmp(cmd[0], "quit")) {
-        int input_fd = 0, output_fd = 1;
-        int *seg_num = segment_line(cmd, &input_fd, &output_fd);
-        int sizefd = 1;
-        int (*fd)[2] = malloc(sizefd * sizeof(int[2]));
-        fd[sizefd - 1][0] = input_fd;
-        for (int j = 1; seg_num[j]; j++) {
-            sizefd++;
-            fd = realloc(fd, sizefd * sizeof(int[2]));
-            int pipefd[2];
-            pipe(pipefd);
-            fd[sizefd - 2][1] = pipefd[1];
-            fd[sizefd - 1][0] = pipefd[0];
-        }
-        fd[sizefd - 1][1] = output_fd;
+        int *seg_num = segment_line(cmd);
+        int (*fd)[2] = malloc(sizeof(int[2]));
+        int j = 0;
+        do {
+            j++;
+            fd = realloc(fd, j * sizeof(int[2]));
+            pipe(fd[j - 1]);
+        } while (seg_num[j]);
         int i = 0;
         do {
             if (fork() == 0) {
-                dup2(fd[i][0], 0);
-                dup2(fd[i][1], 1);
+                if (i != 0) {
+                    dup2(fd[i - 1][0], 0);
+                    close(fd[i - 1][0]);
+                    close(fd[i - 1][1]);
+                } else {
+                    check_files(cmd, 0);
+                }
+                if (seg_num[i + 1] != 0) {
+                    dup2(fd[i][1], 1);
+                    close(fd[i][1]);
+                    close(fd[i][0]);
+                } else {
+                    close(fd[i][1]);
+                    close(fd[i][0]);
+                    check_files(cmd, seg_num[i]);  // realize with one para
+                }
                 if (execvp(cmd[seg_num[i]], cmd + seg_num[i]) < 0)
                     perror("exec error");
-                close(fd[i][0]);
-                close(fd[i][1]);
                 return 1;
             } else {
+                if (i != 0) {
+                    close(fd[i - 1][0]);
+                    close(fd[i - 1][1]);
+                }
                 wait(NULL);
             }
             i++;
         } while (seg_num[i]);
+        close(fd[0][0]);
+        close(fd[0][1]);
+        close(fd[j - 1][0]);
+        close(fd[j - 1][1]);
+        free(fd);
         free_list(cmd, seg_num);
-        if (input_fd != 0)
-            close(input_fd);
-        if (output_fd != 1)
-            close(output_fd);
         cmd = get_list();
     }
     free(cmd[0]);
