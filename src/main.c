@@ -110,8 +110,28 @@ void free_list(char **arr, int *numb) {
     free(arr);
 }
 
+int bg_exec(char **cmd, int **pid_in_phone, int *size) {
+    for (int i = 0; cmd[i]; i++) {
+        if (strcmp(cmd[i], "&") == 0) {
+            (*size)++;
+            *pid_in_phone = realloc(*pid_in_phone, (*size) * sizeof(int));
+            free(cmd[i]);
+            cmd[i] = NULL;
+            int pid = fork();
+            if (pid == 0) {
+                execvp(cmd[0], cmd);
+                return 1;
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
 int main() {
     char **cmd = get_list();
+    int *pid_in_phone = NULL;
+    int pipsize = 0;  // pip = PidInPhone
     while (strcmp(cmd[0], "exit") && strcmp(cmd[0], "quit")) {
         int *seg_num = segment_line(cmd);
         int (*fd)[2] = NULL;
@@ -119,6 +139,9 @@ int main() {
         for ( ; seg_num[segsize] ; segsize++) {
             fd = realloc(fd, segsize * sizeof(int[2]));
             pipe(fd[segsize - 1]);
+        }
+        if (segsize == 1 && bg_exec(cmd, &pid_in_phone, &pipsize)) {
+            segsize = 0;
         }
         for (int i = 0 ; i < segsize; i++) {
             if (fork() == 0) {
@@ -161,6 +184,11 @@ int main() {
         free_list(cmd, seg_num);
         cmd = get_list();
     }
+    for (int i = 0; i < pipsize; i++) {
+        waitpid(pid_in_phone[i], 0, 0);
+    }
+    if (pid_in_phone)
+        free(pid_in_phone);
     free(cmd[0]);
     free(cmd);
     return 0;
