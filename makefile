@@ -1,3 +1,3 @@
 main: src/main.c
 	cpplint --filter=-legal / copyright src/main.c
-	gcc src/main.c -o bin/main -Wall -lm  
+	gcc src/main.c -o bin/main -Wall -lm -fsanitize=leak,address
