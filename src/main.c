@@ -83,7 +83,7 @@ int check_files(char **cmd, int startpoint) {
 
 int *segment_line(char **cmd) {
     int cnt = 1;
-    int *answ = malloc((cnt + 1) * sizeof(int));  // why realloc isnt working?
+    int *answ = malloc((cnt + 1) * sizeof(int));
     answ[0] = 0;
     for (int i = 0; cmd[i]; i++) {
         if (strcmp(cmd[i], "|") == 0) {
@@ -118,27 +118,25 @@ int main() {
         int segsize = 1;
         for ( ; seg_num[segsize] ; segsize++) {
             fd = realloc(fd, segsize * sizeof(int[2]));
+            pipe(fd[segsize - 1]);
         }
         for (int i = 0 ; i < segsize; i++) {
-            if ((i + 1) != segsize) {
-                pipe(fd[i]);
-            }
             if (fork() == 0) {
                 if (i == 0) {
                     if (check_files(cmd, 0) == 2 && seg_num[i + 1]) {
                         execvp(cmd[0], cmd);
-                        }
+                    }
                 } else {
                     dup2(fd[i - 1][0], 0);
-                    close(fd[i - 1][0]);
-                    close(fd[i - 1][1]);
                 }
                 if (seg_num[i + 1] == 0) {
                     check_files(cmd, seg_num[i]);
                 } else {
                     dup2(fd[i][1], 1);
-                    close(fd[i][0]);
-                    close(fd[i][1]);
+                }
+                for (int j = 0; j < segsize - 1; j++) {
+                    close(fd[j][0]);
+                    close(fd[j][1]);
                 }
                 if (execvp(cmd[seg_num[i]], cmd + seg_num[i]) < 0)
                     perror("exec error");
@@ -148,9 +146,13 @@ int main() {
                     close(fd[i - 1][0]);
                     close(fd[i - 1][1]);
                 }
-                wait(NULL);
             }
         }
+
+        for (int i = 0; i < segsize; i++) {
+            wait(NULL);
+        }
+
         if (fd) {
             close(fd[segsize - 2][0]);
             close(fd[segsize - 2][1]);
