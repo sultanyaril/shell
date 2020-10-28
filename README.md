@@ -21,6 +21,7 @@ bin/main
 3) Redirection of input and output
 4) Conveyor for 2 elements
 5) Conveyor for n elements
+6) Background mode
 
 ![alt text](https://media.tenor.com/images/ff89e4a0396d82a99c6bc1901e16ff41/tenor.gif)
 
